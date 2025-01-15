@@ -9,6 +9,7 @@ import provider
 import importlib
 import shutil
 import argparse
+import models.pointnet2_cls_ssg as pointnet2_cls_ssg
 
 from pathlib import Path
 from tqdm import tqdm
@@ -129,13 +130,14 @@ def main(args):
 
     '''MODEL LOADING'''
     num_class = args.num_category
-    model = importlib.import_module(args.model)
+    # model = importlib.import_module(args.model)
+    # model = pointnet2_cls_ssg.get_model(num_class)
     shutil.copy('./models/%s.py' % args.model, str(exp_dir))
     shutil.copy('models/pointnet2_utils.py', str(exp_dir))
-    shutil.copy('./train_classification.py', str(exp_dir))
+    shutil.copy('./train.py', str(exp_dir))
 
-    classifier = model.get_model(num_class, normal_channel=args.use_normals)
-    criterion = model.get_loss()
+    classifier = pointnet2_cls_ssg.get_model(num_class, normal_channel=args.use_normals)
+    criterion = pointnet2_cls_ssg.get_loss()
     classifier.apply(inplace_relu)
 
     if not args.use_cpu:

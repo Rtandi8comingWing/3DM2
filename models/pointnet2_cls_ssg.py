@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from pointnet2_utils import PointNetSetAbstraction
-from ..mamba_ssm.modules.mamba_simple import Mamba
+from models.pointnet2_utils import PointNetSetAbstraction
+from mamba_ssm.modules.mamba_simple import Mamba,GlobularMamba
 
 
 class get_model(nn.Module):
@@ -19,8 +19,8 @@ class get_model(nn.Module):
         self.bn2 = nn.BatchNorm1d(256)
         self.drop2 = nn.Dropout(0.4)
         self.fc3 = nn.Linear(256, num_class)
-        self.mamba1 = Mamba(128)
-        self.mamba2 = Mamba(256)
+        self.mamba1 = GlobularMamba(128)
+        self.mamba2 = GlobularMamba(256)
     def forward(self, xyz):
         B, _, _ = xyz.shape
         if self.normal_channel:
@@ -29,9 +29,15 @@ class get_model(nn.Module):
         else:
             norm = None
         l1_xyz, l1_points = self.sa1(xyz, norm)
-        l1_points=self.mamba1(l1_points)
+        l1_points = l1_points.permute(0, 2, 1)
+        print("l1_points before Mamba:",l1_points.shape)
+        l1_points = self.mamba1(l1_points)
+        print("l1_points after Mamba:", l1_points.shape)
+        l1_points = l1_points.permute(0, 2, 1)
         l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
+        l2_points = l2_points.permute(0, 2, 1)
         l2_points = self.mamba2(l2_points)
+        l2_points = l2_points.permute(0, 2, 1)
         l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
         x = l3_points.view(B, 1024)
         x = self.drop1(F.relu(self.bn1(self.fc1(x))))
