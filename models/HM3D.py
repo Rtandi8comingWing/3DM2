@@ -1,16 +1,17 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from models.HM3D_utils import PointNetSetAbstraction,
+from models.pointnet2_utils import PointNetSetAbstraction
+from models.HM3D_utils import GlobularMambaSetAbstraction
 from mamba_ssm.modules.mamba_simple import Mamba,GlobularMamba
 
 
-class ThreeDHM(nn.Module):
+class HM3D(nn.Module):
     def __init__(self,num_class,normal_channel=True):
-        super(ThreeDHM, self).__init__()
+        super(HM3D, self).__init__()
         in_channel = 6 if normal_channel else 3
         self.normal_channel = normal_channel
-        self.sa1 = GlobularMambaSetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, mlp=[64, 64, 128], group_all=False)
-        self.sa2 = GlobularMambaSetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, mlp=[128, 128, 256], group_all=False)
+        self.sa1 = GlobularMambaSetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=True)
+        self.sa2 = GlobularMambaSetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, group_all=False, is_emd=False)
 
 
 
@@ -31,16 +32,11 @@ class ThreeDHM(nn.Module):
             xyz = xyz[:, :3, :]
         else:
             norm = None
+        print("xyz shape:",xyz.shape)
         l1_xyz, l1_points = self.sa1(xyz, norm)
-        l1_points = l1_points.permute(0, 2, 1)
-        print("l1_points before Mamba:",l1_points.shape)
-        l1_points = self.mamba1(l1_points)
-        print("l1_points after Mamba:", l1_points.shape)
-        l1_points = l1_points.permute(0, 2, 1)
+        print("l1_points shape:B, C, N", l1_points.shape) #24, 128, 512
         l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
-        l2_points = l2_points.permute(0, 2, 1)
-        l2_points = self.mamba2(l2_points)
-        l2_points = l2_points.permute(0, 2, 1)
+        print("l2_points shape:B, C, N", l2_points.shape) #24, 262, 128
         l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
         x = l3_points.view(B, 1024)
         x = self.drop1(F.relu(self.bn1(self.fc1(x))))

@@ -604,7 +604,12 @@ class MambaInnerFnNoOutProj(torch.autograd.Function):
         dx, dz = dxz.chunk(2, dim=1)
         # dout = rearrange(dout, "b l e -> e (b l)")
         # dout_y = rearrange(out_proj_weight.t() @ dout, "d (b l) -> b d l", l=L)
-        dout_y = rearrange(dout, "b l e -> b e l)")
+        dout_y = rearrange(dout, "b l e -> b e l").contiguous()
+        # print("dout size:", dout_y.size())
+        # print("dout stride:", dout_y.stride())
+        # dout_y = dout_y.contiguous()
+        # print("dout size:", dout_y.size())
+        # print("dout stride:", dout_y.stride())
         dconv1d_out, ddelta, dA, dB, dC, dD, ddelta_bias, dz, out_z = selective_scan_cuda.bwd(
             conv1d_out, delta, A, B, C, D, z, delta_bias, dout_y, scan_intermediates, out, dz,
             ctx.delta_softplus,
