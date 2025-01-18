@@ -17,6 +17,8 @@ try:
 except ImportError:
     causal_conv1d_fn, causal_conv1d_update = None, None
 
+#causal_conv1d_fn, causal_conv1d_update = None, None
+
 try:
     from mamba_ssm.ops.triton.selective_state_update import selective_state_update
 except ImportError:
@@ -504,7 +506,8 @@ class GlobularMamba(nn.Module):
                 y, last_state = y
                 ssm_state.copy_(last_state)
             y = rearrange(y, "b d l -> b l d")
-            out = self.out_proj(y)
+            # out = self.out_proj(y)
+            out = y
         return out
 
     def step(self, hidden_states, conv_state, ssm_state):

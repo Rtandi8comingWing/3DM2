@@ -133,8 +133,8 @@ def main(args):
     # model = importlib.import_module(args.model)
     # model = pointnet2_cls_ssg.get_model(num_class)
     shutil.copy('./models/%s.py' % args.model, str(exp_dir))
-    shutil.copy('models/pointnet2_utils.py', str(exp_dir))
-    shutil.copy('./train.py', str(exp_dir))
+    shutil.copy('models/HM3D_utils.py', str(exp_dir))
+    shutil.copy('./train2.py', str(exp_dir))
 
     classifier = HM3D.HM3D(num_class, normal_channel=args.use_normals)
     criterion = HM3D.get_loss()
