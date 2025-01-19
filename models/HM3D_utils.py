@@ -7,7 +7,7 @@ from einops import rearrange
 import sys,os
 #from mamba_ssm.modules.mamba_simple import Mamba,GlobularMamba
 #sys.path.append(os.path.abspath('/home/data_disk/cty/pyWorkSpace/3DM2'))
-from mamba_ssm.modules.mamba_simple import GlobularMamba
+from mamba_ssm.modules.mamba_simple import GlobularMamba,Mamba
 
 def timeit(tag, t):
     print("{}: {}s".format(tag, time() - t))
@@ -419,11 +419,16 @@ class GlobularMambaSetAbstraction(nn.Module):
         self.is_emd=is_emd
         if self.is_emd:
             self.mamba_inchannel = 64
-            self.emd = nn.Linear(in_channel, self.mamba_inchannel)
+            # self.emd = nn.Linear(in_channel, self.mamba_inchannel)
+            self.emd = nn.Conv2d(in_channel, self.mamba_inchannel, 1)
+            # self.emd_bn = nn.BatchNorm2d(self.mamba_inchannel)
         else:
             self.mamba_inchannel = in_channel
             self.emd = None
+            self.emd_bn = None
         self.mamba = GlobularMamba(self.mamba_inchannel)
+        self.bn = nn.BatchNorm2d(self.mamba_inchannel*2)
+        self.mamba1 = Mamba(self.mamba_inchannel)
     def forward(self, xyz, points):
         """
         Input:
@@ -448,14 +453,24 @@ class GlobularMambaSetAbstraction(nn.Module):
         # new_points = rearrange(new_points, 'b n k c -> (b n) k c')  # 合并 K 和 C 维度
         # new_points = new_points.permute(0, 3, 2, 1) # [B, C+D, nsample,npoint]
         if self.is_emd:
-            new_points = rearrange(new_points, 'b n k c -> (b n k) c')  # 合并 K 和 C 维度
+            #new_points = rearrange(new_points, 'b n k c -> (b n k) c')  # 合并 K 和 C 维度
+            new_points = rearrange(new_points, 'b n k c -> b c k n')  # 合并 K 和 C 维度
+            # new_points = F.relu(self.emd_bn(self.emd(new_points)))
             new_points = self.emd(new_points)
-            new_points = rearrange(new_points, '(b n k) c -> (b n) k c', b=B, n=N, k=K)  # 合并 K 和 C 维度
+            new_points = rearrange(new_points, 'b c k n -> (b n) k c', b=B, n=N, k=K)  # 合并 K 和 C 维度
+            #new_points = rearrange(new_points, '(b n k) c -> (b n) k c', b=B, n=N, k=K)  # 合并 K 和 C 维度
         else :
             new_points = rearrange(new_points, 'b n k c -> (b n) k c')  # 合并 K 和 C 维度
 
+        # print(new_points.shape)
+
+        # new_points = self.mamba1(new_points)
         new_points = self.mamba(new_points)
-        new_points = rearrange(new_points, '(b n) k c -> b n k c', b=B, n=N)  # 合并 K 和 C 维度
+        new_points = rearrange(new_points, '(b n) k c -> b c k n', b=B, n=N, k=K)  # 合并 K 和 C 维度
+        #new_points = F.relu(self.bn(new_points))
+        new_points = self.bn(new_points)
+        new_points = rearrange(new_points, 'b c k n -> b n k c', b=B, n=N)  # 合并 K 和 C 维度
+        # new_points = rearrange(new_points, '(b n) k c -> b n k c', b=B, n=N)  # 合并 K 和 C 维度
         new_points = torch.max(new_points, 2)[0] #B, N, C
         new_xyz = new_xyz.permute(0, 2, 1) #B, 3, N
         new_points = new_points.permute(0, 2, 1) #B, C, N
@@ -520,8 +535,8 @@ class GlobularMambaDensitySetAbstraction(nn.Module):
         inverse_max_density = grouped_density.max(dim = 2, keepdim=True)[0]
         density_scale = grouped_density / inverse_max_density
         #print("density_scale:", density_scale.shape)
-        #density_scale = self.densitynet(density_scale.permute(0, 3, 2, 1))
-        #density_scale = density_scale.permute(0, 3, 2, 1)
+        # density_scale = self.densitynet(density_scale.permute(0, 3, 2, 1))
+        # density_scale = density_scale.permute(0, 3, 2, 1)
         # 1. 扩展 density_scale 到 [b, n, k, c]，让每个邻居的权重与对应特征的每个维度匹配
         expanded_density_scale = density_scale.expand(-1, -1, -1, new_points.shape[-1])
         # print("expanded_density_scale:",expanded_density_scale.shape)
@@ -541,6 +556,7 @@ class GlobularMambaDensitySetAbstraction(nn.Module):
         # 2. 对每个采样点的邻居特征进行最大池化
         # 使用 torch.max 来对特征维度进行最大池化
         new_points = torch.max(new_points * expanded_density_scale,2)[0]
+        #new_points = torch.mean(new_points * expanded_density_scale, 2)
         #new_points= (new_points * expanded_density_scale).max(dim=2)[0] # 对每个采样点的邻居特征做最大池化
 
         #print("new_points:", new_points.shape)

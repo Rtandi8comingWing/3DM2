@@ -10,13 +10,20 @@ class HM3D(nn.Module):
         super(HM3D, self).__init__()
         in_channel = 6 if normal_channel else 3
         self.normal_channel = normal_channel
-        # self.sa1 = GlobularMambaSetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=True)
-        # self.sa2 = GlobularMambaSetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, group_all=False, is_emd=False)
-        # self.sa3 = GlobularMambaSetAbstraction(npoint=None, radius=None, nsample=None, in_channel=262 + 3, group_all=True,is_emd=False)
+        self.sa1 = GlobularMambaSetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=True)
+        self.sa2 = GlobularMambaSetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, group_all=False, is_emd=False)
+        self.sa3 = GlobularMambaSetAbstraction(npoint=None, radius=None, nsample=None, in_channel=262 + 3, group_all=True,is_emd=False)
 
-        self.sa1 = GlobularMambaDensitySetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=True, bandwidth= 0.1)
-        self.sa2 = GlobularMambaDensitySetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, group_all=False, is_emd=False, bandwidth= 0.2)
-        self.sa3 = GlobularMambaDensitySetAbstraction(npoint=None, radius=None, nsample=None, in_channel=262 + 3, group_all=True,is_emd=False, bandwidth= 0.4)
+        # self.sa1 = GlobularMambaSetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=False)
+        # self.sa2 = GlobularMambaSetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=in_channel + 3, group_all=False, is_emd=False)
+        # self.sa3 = GlobularMambaSetAbstraction(npoint=None, radius=None, nsample=None, in_channel=in_channel + 3 + 3 , group_all=True,is_emd=False)
+
+        # self.mamba1 = Mamba(128)
+        # self.mamba2 = Mamba(262)
+
+        # self.sa1 = GlobularMambaDensitySetAbstraction(npoint=512, radius=0.2, nsample=32, in_channel=in_channel, group_all=False, is_emd=True, bandwidth= 0.1)
+        # self.sa2 = GlobularMambaDensitySetAbstraction(npoint=128, radius=0.4, nsample=64, in_channel=128 + 3, group_all=False, is_emd=False, bandwidth= 0.2)
+        # self.sa3 = GlobularMambaDensitySetAbstraction(npoint=None, radius=None, nsample=None, in_channel=262 + 3, group_all=True,is_emd=False, bandwidth= 0.4)
 
         self.fc1 = nn.Linear(530, 256)
         self.bn1 = nn.BatchNorm1d(256)
@@ -36,10 +43,18 @@ class HM3D(nn.Module):
         # print("xyz shape:",xyz.shape)
         l1_xyz, l1_points = self.sa1(xyz, norm)
         # print("l1_points shape:B, C, N", l1_points.shape) #24, 128, 512
+        #print(l1_points.shape)
+        # l1_points = l1_points.permute(0, 2, 1).contiguous()
+        # l1_points = self.mamba1(l1_points)
+        # l1_points = l1_points.permute(0, 2, 1).contiguous()
         l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
         # print("l2_points shape:B, C, N", l2_points.shape) #24, 262, 128
+        # l2_points = l2_points.permute(0, 2, 1).contiguous()
+        # l2_points = self.mamba2(l2_points)
+        # l2_points = l2_points.permute(0, 2, 1).contiguous()
         l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
         # print("l3_points shape:B, C, N", l3_points.shape)  # 24, 530, 1
+        # print(l3_points.shape)
         x = l3_points.view(B, 530)
         # print("l3_points shape:B, C, N", l3_points.shape)  # 24, 530,
         x = self.drop1(F.relu(self.bn1(self.fc1(x))))

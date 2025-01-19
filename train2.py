@@ -8,6 +8,7 @@ import logging
 import provider
 import importlib
 import shutil
+import time
 import argparse
 import models.HM3D as HM3D
 
@@ -144,6 +145,7 @@ def main(args):
         classifier = classifier.cuda()
         criterion = criterion.cuda()
 
+    '''CHECK POINT LOADING'''
     try:
         checkpoint = torch.load(str(exp_dir) + '/checkpoints/best_model.pth')
         start_epoch = checkpoint['epoch']
@@ -173,6 +175,7 @@ def main(args):
     '''TRANING'''
     logger.info('Start training...')
     for epoch in range(start_epoch, args.epoch):
+        epoch_start_time = time.time()  # 记录epoch开始时间
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
         mean_correct = []
         classifier = classifier.train()
@@ -203,6 +206,9 @@ def main(args):
 
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
+        # 计算并记录每个epoch的训练时间
+        epoch_time = time.time() - epoch_start_time  # 计算每个epoch的总时间
+        log_string('Epoch [%d/%d] completed in %.4f seconds' % (epoch + 1, args.epoch, epoch_time))
 
         with torch.no_grad():
             """
